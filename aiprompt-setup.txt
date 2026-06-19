@@ -113,7 +113,10 @@ Walk them through creating a Fine-Grained Personal Access Token:
        Repository access: "Only select repositories"
                           → Select their target repository
 
-  4. Under Permissions → Repository permissions, set:
+  4. Under Permissions → Account permissions, set:
+       Models:            Read  ← REQUIRED for GitHub Models LLM access
+
+     Under Permissions → Repository permissions, set:
        Contents:          Read-only
        Issues:            Read and write
        Metadata:          Read-only  (selected automatically)

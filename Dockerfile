@@ -13,7 +13,7 @@
 # Stage 1: Binary downloader
 # Keeps curl/wget out of the final image.
 # -----------------------------------------------------------------------------
-FROM debian:bookworm-slim AS downloader
+FROM --platform=linux/amd64 debian:bookworm-slim AS downloader
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -21,12 +21,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Trivy — dependency & container vulnerability scanner (aquasecurity)
-ARG TRIVY_VERSION=0.51.4
-RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-    | sh -s -- -b /usr/local/bin "v${TRIVY_VERSION}"
+# Using direct download (not install.sh) — install script/action was compromised Mar 2026
+ARG TRIVY_VERSION=0.71.1
+RUN curl -sSfL \
+    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+    -o /tmp/trivy.tar.gz \
+    && tar -xz -C /usr/local/bin -f /tmp/trivy.tar.gz trivy \
+    && rm /tmp/trivy.tar.gz
 
 # Gitleaks — secret & credential detection
-ARG GITLEAKS_VERSION=8.18.2
+ARG GITLEAKS_VERSION=8.30.1
 RUN curl -sSfL \
     "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
     | tar -xz -C /usr/local/bin gitleaks
@@ -45,7 +49,7 @@ RUN trivy --version && gitleaks version && hadolint --version
 # -----------------------------------------------------------------------------
 # Stage 2: Final image
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim AS final
+FROM --platform=linux/amd64 python:3.12-slim AS final
 
 LABEL org.opencontainers.image.title="ai-scanner"
 LABEL org.opencontainers.image.description="AI Scanner — pre-built CI/CD image with tools, runtimes, and agent system"
@@ -98,7 +102,8 @@ RUN semgrep --config p/python       /dev/null 2>/dev/null || true \
 COPY scanner/ /scanner/scanner/
 
 # ── Non-root user ─────────────────────────────────────────────────────────────
-RUN useradd -m -u 1001 -s /bin/bash scanner
+RUN useradd -m -u 1001 -s /bin/bash scanner \
+    && chmod -R a+rX /scanner
 USER scanner
 
 # ── Working directory (repo will be mounted here) ─────────────────────────────

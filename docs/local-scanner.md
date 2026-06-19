@@ -26,7 +26,8 @@ The scanner uses GitHub Models (GPT-4o) to interpret findings. Authentication us
 1. Go to [https://github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)
 2. Click **Generate new token**
 3. Give it a name (e.g. `ai-scanner-local`) and set an expiration
-4. Under **Permissions**, no special scopes are required for GitHub Models — a basic token is sufficient
+4. Under **Permissions → Account permissions**, set **Models → Read**
+   (Required for GitHub Models API access — without it you'll get a 401 error)
 5. Click **Generate token** and copy the value
 
 ---
