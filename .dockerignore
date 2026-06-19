@@ -1,0 +1,49 @@
+# =============================================================================
+# .dockerignore — keep the build context lean
+# =============================================================================
+# Only the files the Dockerfile explicitly COPYs need to reach the daemon.
+# Everything else wastes bandwidth and can expose secrets.
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# CI/CD (workflows don't need to be inside the image)
+.github
+
+# Local development artifacts
+.env
+.env.*
+*.log
+*.tmp
+*.swp
+.DS_Store
+
+# Python artifacts
+__pycache__
+*.py[cod]
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node artifacts
+node_modules/
+npm-debug.log*
+
+# Test output / reports
+reports/
+*.json.report
+coverage/
+
+# Docs (not needed in the image)
+*.md
+docs/

@@ -1,0 +1,25 @@
+# =============================================================================
+# Python scanning tools — baked into the Docker image
+# =============================================================================
+# Pin minor versions for reproducibility; update intentionally via PR.
+# Bump a version here → triggers Docker layer rebuild from this point down.
+# =============================================================================
+
+# SAST — multi-language static analysis (Python, JS, TS, Go, Java, …)
+semgrep==1.72.0
+
+# Dependency CVE scanning — checks installed packages against OSV database
+pip-audit==2.7.3
+
+# Python security linter — AST-based, catches common security anti-patterns
+bandit==1.7.8
+
+# Python linter + formatter — replaces flake8, pylint, isort, black in one tool
+ruff==0.4.7
+
+# Test coverage measurement — used by test coverage agent (static phase)
+pytest==8.2.2
+pytest-cov==5.0.0
+
+# LLM client — OpenAI-compatible SDK used to call GitHub Models
+openai==1.35.3

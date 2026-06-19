@@ -1,0 +1,14 @@
+{
+  "name": "ai-scanner-node-tools",
+  "version": "1.0.0",
+  "description": "Node.js scanning tools baked into the ai-scanner Docker image",
+  "private": true,
+  "tools": {
+    "eslint": "8.57.0",
+    "@eslint/js": "8.57.0"
+  },
+  "notes": {
+    "eslint": "JavaScript/TypeScript linter — catches style, quality, and some security issues",
+    "upgrade-path": "Bump versions here and rebuild the image. ESLint 9+ uses flat config — test before upgrading."
+  }
+}

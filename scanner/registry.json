@@ -1,0 +1,131 @@
+{
+  "_comment": "Scanner registry — the orchestrator reads this to decide which agents to run. Add new agents here without touching orchestrator.py.",
+  "agents": [
+    {
+      "id": "security",
+      "module": "scanner.agents.security",
+      "class": "SecurityAgent",
+      "category": "security",
+      "type": "tool-wrapper",
+      "description": "SAST scan via Semgrep (OWASP Top 10) and Bandit (Python security AST)",
+      "always_run": true,
+      "requires": {
+        "languages": ["python", "javascript", "typescript", "java", "go", "ruby", "php"]
+      }
+    },
+    {
+      "id": "secrets",
+      "module": "scanner.agents.secrets",
+      "class": "SecretsAgent",
+      "category": "security",
+      "type": "tool-wrapper",
+      "description": "Secret and credential detection via Gitleaks and Semgrep secrets ruleset",
+      "always_run": true,
+      "requires": {}
+    },
+    {
+      "id": "dependencies",
+      "module": "scanner.agents.dependencies",
+      "class": "DependenciesAgent",
+      "category": "security",
+      "type": "tool-wrapper",
+      "description": "CVE scanning of dependencies via Trivy and pip-audit",
+      "always_run": true,
+      "requires": {
+        "files": ["requirements.txt", "pyproject.toml", "package.json", "Pipfile", "go.mod"]
+      }
+    },
+    {
+      "id": "license",
+      "module": "scanner.agents.license",
+      "class": "LicenseAgent",
+      "category": "compliance",
+      "type": "tool-wrapper",
+      "description": "Dependency license compliance scan via Trivy",
+      "always_run": true,
+      "requires": {
+        "files": ["requirements.txt", "pyproject.toml", "package.json", "Pipfile", "go.mod"]
+      }
+    },
+    {
+      "id": "code_quality",
+      "module": "scanner.agents.code_quality",
+      "class": "CodeQualityAgent",
+      "category": "quality",
+      "type": "tool-wrapper",
+      "description": "Code quality via Ruff (Python) and ESLint (JavaScript/TypeScript)",
+      "always_run": false,
+      "requires": {
+        "languages": ["python", "javascript", "typescript"]
+      }
+    },
+    {
+      "id": "dockerfile_lint",
+      "module": "scanner.agents.dockerfile_lint",
+      "class": "DockerfileLintAgent",
+      "category": "quality",
+      "type": "tool-wrapper",
+      "description": "Dockerfile best-practice linting via Hadolint",
+      "always_run": false,
+      "requires": {
+        "has_dockerfile": true
+      }
+    },
+    {
+      "id": "ai_safety",
+      "module": "scanner.agents.ai_safety",
+      "class": "AISafetyAgent",
+      "category": "ai-safety",
+      "type": "llm-agent",
+      "description": "AI-specific risk analysis: prompt injection, model pinning, output handling, PII in prompts",
+      "always_run": false,
+      "requires": {
+        "is_ai_app": true
+      }
+    },
+    {
+      "id": "api_design",
+      "module": "scanner.agents.api_design",
+      "class": "APIDesignAgent",
+      "category": "quality",
+      "type": "llm-agent",
+      "description": "API design review: HTTP methods, error handling, versioning, data exposure",
+      "always_run": false,
+      "requires": {
+        "languages": ["python", "javascript", "typescript"]
+      }
+    },
+    {
+      "id": "auth",
+      "module": "scanner.agents.auth",
+      "class": "AuthAgent",
+      "category": "security",
+      "type": "llm-agent",
+      "description": "Authentication and authorisation architecture review",
+      "always_run": false,
+      "requires": {
+        "languages": ["python", "javascript", "typescript", "java", "go"]
+      }
+    },
+    {
+      "id": "non_code_files",
+      "module": "scanner.agents.non_code_files",
+      "class": "NonCodeFilesAgent",
+      "category": "security",
+      "type": "llm-agent",
+      "description": "Reviews docs, prompt files, and notebooks for PII, exposed architecture, and prompt quality",
+      "always_run": true,
+      "requires": {}
+    },
+    {
+      "id": "test_coverage",
+      "module": "scanner.agents.test_coverage",
+      "class": "TestCoverageAgent",
+      "category": "quality",
+      "type": "llm-agent",
+      "description": "Static test coverage assessment: framework detection, file ratios, coverage posture",
+      "always_run": true,
+      "requires": {}
+    }
+  ]
+}

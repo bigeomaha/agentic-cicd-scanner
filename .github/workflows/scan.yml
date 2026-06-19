@@ -1,0 +1,218 @@
+# =============================================================================
+# Pipeline 2: AI Code Scanner
+# =============================================================================
+# Runs on every PR and every push to main.
+# Pulls the pre-built ai-scanner image (built by docker-build.yml),
+# mounts the repo, runs the orchestrator, and posts results as a PR comment.
+#
+# Prerequisites:
+#   - docker-build.yml has already built and pushed the image to GHCR
+#   - GITHUB_TOKEN is available (automatic in GitHub Actions)
+# =============================================================================
+
+name: AI Code Scan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+
+jobs:
+  scan:
+    name: Run AI Scanner
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents:      read
+      packages:      read    # pull image from GHCR
+      pull-requests: write   # post PR comment
+      statuses:      write   # update commit status
+
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/ai-scanner:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      # ── Checkout the repo being scanned ─────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so gitleaks can check git log
+
+      # ── Run the orchestrator ──────────────────────────────────────────────
+      - name: Run AI Scanner
+        id: scan
+        run: |
+          python -m scanner.orchestrator \
+            --repo "$GITHUB_WORKSPACE" \
+            --output "$GITHUB_WORKSPACE/scan-report.json" \
+            --markdown "$GITHUB_WORKSPACE/scan-summary.md" \
+            --commit "${{ github.sha }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --registry "/scanner/scanner/registry.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: /scanner
+        # Don't fail the step on scan findings — we control the outcome below
+        continue-on-error: true
+
+      # ── Post PR comment ───────────────────────────────────────────────────
+      - name: Post PR Comment
+        if: github.event_name == 'pull_request'
+        run: |
+          python - << 'PYEOF'
+          import json, os, urllib.request, urllib.error
+
+          workspace = os.environ["GITHUB_WORKSPACE"]
+          token     = os.environ["GITHUB_TOKEN"]
+          repo      = os.environ["GITHUB_REPOSITORY"]
+          pr_num    = os.environ.get("PR_NUMBER", "")
+
+          if not pr_num:
+              print("No PR number — skipping comment.")
+              exit(0)
+
+          # Read markdown summary
+          summary_path = os.path.join(workspace, "scan-summary.md")
+          try:
+              with open(summary_path) as f:
+                  body = f.read()
+          except FileNotFoundError:
+              body = "⚠️ AI Scanner: report file not found. Check the scan step logs."
+
+          # Look for an existing AI Scanner comment and update it (avoid spam)
+          api_base  = f"https://api.github.com/repos/{repo}"
+          headers   = {
+              "Authorization": f"Bearer {token}",
+              "Content-Type":  "application/json",
+              "Accept":        "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2026-11-28",
+          }
+
+          def gh_request(url, method="GET", data=None):
+              req = urllib.request.Request(url, method=method,
+                                           data=json.dumps(data).encode() if data else None,
+                                           headers=headers)
+              try:
+                  with urllib.request.urlopen(req) as r:
+                      return json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  print(f"GitHub API error: {e.code} {e.reason}")
+                  return None
+
+          # Find existing scanner comment
+          comments = gh_request(f"{api_base}/issues/{pr_num}/comments") or []
+          existing_id = next(
+              (c["id"] for c in comments if "AI Scanner Report" in c.get("body", "")),
+              None
+          )
+
+          if existing_id:
+              gh_request(f"{api_base}/issues/comments/{existing_id}", method="PATCH", data={"body": body})
+              print(f"Updated existing PR comment {existing_id}")
+          else:
+              gh_request(f"{api_base}/issues/{pr_num}/comments", method="POST", data={"body": body})
+              print("Posted new PR comment")
+          PYEOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER:    ${{ github.event.pull_request.number }}
+
+      # ── Update commit status ──────────────────────────────────────────────
+      - name: Update Commit Status
+        if: always()
+        run: |
+          python - << 'PYEOF'
+          import json, os, urllib.request, urllib.error
+
+          workspace = os.environ["GITHUB_WORKSPACE"]
+          token     = os.environ["GITHUB_TOKEN"]
+          repo      = os.environ["GITHUB_REPOSITORY"]
+          sha       = os.environ["GITHUB_SHA"]
+
+          report_path = os.path.join(workspace, "scan-report.json")
+          try:
+              with open(report_path) as f:
+                  report_data = json.load(f)
+              status_val = report_data.get("overall_status", "pass")
+              score      = report_data.get("overall_score", 100)
+          except (FileNotFoundError, json.JSONDecodeError):
+              status_val = "error"
+              score      = 0
+
+          gh_state   = {"pass": "success", "warn": "success", "fail": "failure", "error": "error"}.get(status_val, "error")
+          description = f"Score: {score}/100 — {status_val.upper()}"
+
+          data = {
+              "state":       gh_state,
+              "description": description,
+              "context":     "AI Scanner",
+          }
+
+          url = f"https://api.github.com/repos/{repo}/statuses/{sha}"
+          req = urllib.request.Request(
+              url, method="POST",
+              data=json.dumps(data).encode(),
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type":  "application/json",
+                  "Accept":        "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2026-11-28",
+              }
+          )
+          try:
+              urllib.request.urlopen(req)
+              print(f"Commit status set: {gh_state} — {description}")
+          except urllib.error.HTTPError as e:
+              print(f"Failed to set commit status: {e.code} {e.reason}")
+          PYEOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Upload full JSON report as artifact ───────────────────────────────
+      - name: Upload Scan Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-scan-report-${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/scan-report.json
+            ${{ github.workspace }}/scan-summary.md
+          retention-days: 30
+
+      # ── Fail the job if scanner found critical issues ─────────────────────
+      # (currently reporting only — change 'warn' to 'pass' to be stricter)
+      - name: Enforce Gate
+        if: always()
+        run: |
+          python - << 'PYEOF'
+          import json, os, sys
+
+          workspace   = os.environ["GITHUB_WORKSPACE"]
+          report_path = os.path.join(workspace, "scan-report.json")
+
+          try:
+              with open(report_path) as f:
+                  report_data = json.load(f)
+          except (FileNotFoundError, json.JSONDecodeError):
+              print("Report not found — skipping gate.")
+              sys.exit(0)
+
+          status = report_data.get("overall_status", "pass")
+          crits  = len(report_data.get("critical_findings", []))
+
+          # Iteration 1: only block on fail (critical issues)
+          # Future: change threshold to also block on 'warn'
+          if status == "fail":
+              print(f"❌ Gate FAILED — {crits} critical/high issue(s) found. See PR comment for details.")
+              sys.exit(1)
+          else:
+              print(f"✅ Gate PASSED — status={status}")
+              sys.exit(0)
+          PYEOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
